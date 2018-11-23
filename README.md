@@ -2,6 +2,46 @@
 
 Zabbix alertscripts and externalscripts
 
+## External Scripts
+
+### discovery.snmp.mac.if.sh
+_If device return list of mac address in format `<OID>.<MAC>.<IFINDEX>` export them to **json** and add interfaces names_
+
+    Use discovery.snmp.mac.if.sh <snmp version> <snmp commutity> <agent> <OID>
+
+**Sample json**
+
+```json
+{
+  "data": [
+    {
+      "{#MACD}": "76.94.12.128.18.143",
+      "{#MACX}": "4C:5E:0C:80:12:8F",
+      "{#IFINDEX}": "3",
+      "{#IFNAME}": "wlan1",
+      "{#IFALIAS}": "",
+      "{#IFDESCR}": "wlan1"
+    },
+    {
+      "{#MACD}": "212.202.109.72.198.97",
+      "{#MACX}": "D4:CA:6D:48:C6:61",
+      "{#IFINDEX}": "3",
+      "{#IFNAME}": "wlan1",
+      "{#IFALIAS}": "",
+      "{#IFDESCR}": "wlan1"
+    },
+    {
+      "{#MACD}": "212.202.109.80.223.123",
+      "{#MACX}": "D4:CA:6D:50:DF:7B",
+      "{#IFINDEX}": "3",
+      "{#IFNAME}": "wlan1",
+      "{#IFALIAS}": "",
+      "{#IFDESCR}": "wlan1"
+    }
+  ]
+}
+```
+    
 ## Zabbix  server configuration file
 
 Parameter |	Mandatory |	Default |	Description
