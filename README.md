@@ -4,7 +4,18 @@ Zabbix alertscripts and externalscripts
 
 ## External Scripts
 
+### strcomp.sh
+
+_Compare two or more strings_
+
+    Use strcom.sh <string1> <string2> ... <stringn>
+
+Returns: 
+* 0 - strings are not equal
+* 1 - strings are equal 
+
 ### discovery.snmp.mac.if.sh
+
 _If device return list of mac address in format `<OID>.<MAC>.<IFINDEX>` export them to **json** and add interfaces names_
 
     Use discovery.snmp.mac.if.sh <snmp version> <snmp commutity> <agent> <OID>
