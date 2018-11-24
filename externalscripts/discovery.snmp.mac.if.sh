@@ -3,7 +3,7 @@
 # Use discovery.snmp.mac.if.sh <snmp version> <snmpcommutity> <agent> <OID>
 
 if [ $# -ne 4 ]; then
-  exit 0
+  exit 1
 fi
 ifName=".1.3.6.1.2.1.31.1.1.1.1"
 ifDescr=".1.3.6.1.2.1.2.2.1.2"
