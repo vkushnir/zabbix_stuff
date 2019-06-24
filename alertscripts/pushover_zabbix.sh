@@ -22,15 +22,19 @@ CURL="$(which curl)"
 CURL_OPTS=""
 PUSHOVER_URL="https://api.pushover.net/1/messages.json"
 
-[ -f /etc/zabbix/pushnover.conf ] && . /etc/zabbix/pushover.conf
+if [ -f /etc/zabbix/pushover.conf ]; then
+	. /etc/zabbix/pushover.conf
+fi
 
 # Get CMD Parameters
 CUSER=$(echo $1 | cut -f1 -d'@')
 CDEVICE=$(echo $1 | cut -f2 -d'@')
 CTOKEN=$(echo $1 | cut -f3 -d'@')
-CTITLE=$2 
+CTITLE=$2
 CMESSAGE=$3
-
+if [ $# -ge 4 ]; then
+	PTOKEN=$4
+fi
 
 # Functions
 
@@ -88,6 +92,7 @@ local	value="${2}"
 		EXPIRE)		PEXPIRE=$value ;;
 		URL)		PURL=$value ;;
 		URL_TITLE)	PURL_TITLE=$value ;;
+		DATETIME)	PTIMESTAMP=$(date -d "${value//.//}" '+%s') ;;
 		TIMESTAMP)	PTIMESTAMP=$value ;;
 		CALLBACK)	PCALLBACK=$value ;;
 		HTML)		PHTML=$value ;;
