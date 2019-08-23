@@ -1,157 +1,112 @@
 #!/bin/bash
 
-# Defult Values
-PTOKEN=""
-PUSER=""
-PDEVICE=""
-PTITLE=""
-PMESSAGE=""
-PPRIORITY=""	# -2
-PSOUND=""
-PRETRY=""	# 2
-PEXPIRE=""	# 60
-PURL=""
-PURL_TITLE=""
-PTIMESTAMP=""
-PCALLBACK=""
-PHTML=""
+declare -A PFIELDS
+
+# TODO: Receipts and Callbacks API
 
 # Other Variables
-ZASPATH=/usr/lib/zabbix/alertscripts
 CURL="$(which curl)"
 CURL_OPTS=""
 PUSHOVER_URL="https://api.pushover.net/1/messages.json"
 
-if [ -f /etc/zabbix/pushover.conf ]; then
-	. /etc/zabbix/pushover.conf
-fi
-
-# Get CMD Parameters
-CUSER=$(echo $1 | cut -f1 -d'@')
-CDEVICE=$(echo $1 | cut -f2 -d'@')
-CTOKEN=$(echo $1 | cut -f3 -d'@')
-CTITLE=$2
-CMESSAGE=$3
-if [ $# -ge 4 ]; then
-	PTOKEN=$4
-fi
-
 # Functions
+validate_token() {
+    local field=$1
+    local value=$2
+    local ret=1
+    if [[ -z "${value}" ]]; then
+        echo "${field} is unset or empty: Did you specify ${field} on the command line?" >&2
+    elif ! echo "${value}" | egrep -q '[A-Za-z0-9]{30}'; then
+        echo "Value of ${field}, \"${value}\", does not match expected format. Should be 30 characters of A-Z, a-z and 0-9." >&2;
+    else
+        ret=0
+    fi
+    return ${ret}
+}
 
 opt_field() {
-    field=$1
+    local field=$1
     shift
-    value="${*}"
-    if [ ! -z "${value}" ]; then
+    local value="$*"
+    if [[ ! -z "${value}" ]]; then
         echo "-F \"${field}=${value}\""
     fi
 }
 
-validate_token() {
-	field="${1}"
-	value="${2}"
-	ret=1
-	if [ -z "${value}" ]; then
-		echo "${field} is unset or empty: Did you specify ${field} on the command line?" >&2
-	elif ! echo "${value}" | egrep -q '[A-Za-z0-9]{30}'; then
-		echo "Value of ${field}, \"${value}\", does not match expected format. Should be 30 characters of A-Z, a-z and 0-9." >&2;
-	else
-		ret=0
-	fi
-	return ${ret}
-}
+msg_field() {
+    local field=$1
+    shift
+    local value="$*"
+    case ${field} in
+        "SEVERITY")     PFIELDS["PRIORITY"]=${SEVERITY["${value}"]} ;;
+        "SEVERITY2S")   PFIELDS["SOUND"]=${SEVERITY2S["${value}"]} ;;
+        "NSEVERITY")    PFIELDS["PRIORITY"]=${NSEVERITY[${value}]} ;;
+        "NSEVERITY2S")  PFIELDS["SOUND"]=${NSEVERITY2S[${value}]} ;;
+        "DATETIME")     PFIELDS["TIMESTAMP"]=$(date -d "${value//.//}" '+%s') ;;
 
-severity_to_priority() {
-local	priority=-2
-local	severity="${1}"
-
-	case $severity in
-		Information)	priority=-2 ;;
-		Warning)	priority=-1 ;;
-		Average)	priority=0  ;;
-		High)		priority=1  ;;
-		Disaster)	priority=2; PRETRY="2"; PEXPIRE="60" ;;
-	esac
-	echo $priority
-}
-
-set_field() {
-local	field="${1}"
-local	value="${2}"
-	case $field in
-		TOKEN)          PTOKEN=$value;
-				validate_token "TOKEN" "${PTOKEN}" || exit $? ;;
-		USER)		PUSER=$value
-				validate_token "USER" "${USER}" || exit $? ;;
-		DEVICE)		PDEVICE=$value ;;
-		TITLE)		PTITLE=$value ;;
-		PRIORITY)	PPRIORITY=$(severity_to_priority "$value");
-				if [ $PPRIORITY -ge 2 ]; then PRETRY=600; PEXPIRE=3600; fi ;;
-		SOUND)		PSOUND=$value ;;
-		RETRY)		PRETRY=$value ;;
-		EXPIRE)		PEXPIRE=$value ;;
-		URL)		PURL=$value ;;
-		URL_TITLE)	PURL_TITLE=$value ;;
-		DATETIME)	PTIMESTAMP=$(date -d "${value//.//}" '+%s') ;;
-		TIMESTAMP)	PTIMESTAMP=$value ;;
-		CALLBACK)	PCALLBACK=$value ;;
-		HTML)		PHTML=$value ;;
-	esac
+        "TOKEN")        PFIELDS["TOKEN"]=${value};
+                        validate_token "TOKEN" "${value}" || exit $? ;;
+        "USER")         PFIELDS["USER"]=${value}
+                        validate_token "USER" "${value}" || exit $? ;;
+        *)              PFIELDS[$field]=${value} ;;
+    esac
 }
 
 send_message() {
-    local device="${1:-}"
+    curl_cmd="\"${CURL}\" -s -S ${CURL_OPTS} "
 
-    curl_cmd="\"${CURL}\" -s -S \
-        ${CURL_OPTS} \
-        -F \"token=${PTOKEN}\" \
-        -F \"user=${PUSER}\" \
-        -F \"message=${PMESSAGE}\" \
-        $(opt_field device "${PDEVICE}") \
-        $(opt_field callback "${PCALLBACK}") \
-        $(opt_field timestamp "${PTIMESTAMP}") \
-        $(opt_field priority "${PPRIORITY}") \
-        $(opt_field retry "${PRETRY}") \
-        $(opt_field expire "${PEXPIRE}") \
-        $(opt_field title "${PTITLE}") \
-        $(opt_field sound "${PSOUND}") \
-        $(opt_field url "${PURL}") \
-        $(opt_field url_title "${PURL_TITLE}") \
-	$(opt_field html "${PHTML}") \
-        \"${PUSHOVER_URL}\""
+    for field in "${!PFIELDS[@]}"; do
+        curl_cmd+="-F \"${field,,}=${PFIELDS[${field}]}\" "
+     done
+    curl_cmd+="-F \"message=${PMESSAGE}\" \"${PUSHOVER_URL}\""
 
     # execute and return exit code from curl command
     response="$(eval "${curl_cmd}")"
     # TODO: Parse response for value of status to give better error to user
-    r="${?}"
-    if [ "${r}" -ne 0 ]; then
+    r=$?
+    if [[ "${r}" -ne 0 ]]; then
         echo "${0}: Failed to send message" >&2
     fi
 
     return "${r}"
 }
 
+# MAIN
 
-if [ -z "$PUSER" ]; then PUSER=$CUSER; fi
-if [ -z "$PDEVICE" ] && [ -n "$CDEVICE" ]; then PDEVICE=$CDEVICE; fi
-if [ -z "$PTOKEN" ] && [ -n "$CTOKEN" ]; then PTOKEN=$CTOKEN; fi
-if [ -z "$PTITLE" ]; then PTITLE=$CTITLE; fi
-if [ -z "$PMESSAGE" ]; then PMESSAGE=$CMESSAGE; fi
+# Load vlaues from config file
+if [[ -f /etc/zabbix/pushover.conf ]]; then
+    . /etc/zabbix/pushover.conf
+fi
+
+# Parce CMD recipient
+if [[ $# -ge 4 ]]; then
+    PFIELDS['TOKEN']=$4
+fi
+RCPT=$1
+PFIELDS['USER']=${RCPT%@*}
+if [[ ${#RCPT} -gt ${#PFIELDS['USER']} ]] ; then
+        RCPT=${RCPT#*@}
+        PFIELDS['DEVICE']=${RCPT%:*}
+        if [[ ${#RCPT} -gt ${#PFIELDS['DEVICE']} ]]; then
+                PFIELDS['TOKEN']=${RCPT#*:}
+        fi
+fi
+PFIELDS["TITLE"]=$2
+# Zabbix use \r fix this
+MESSAGE=${3//$'\015'}
 
 # Cut pushover rows from Message
-POPTS=$(echo "${PMESSAGE}" | grep -i %PUSHOVER%)
-PMESSAGE=$(echo "${PMESSAGE}" | grep -iv %PUSHOVER%)
+POPTS=$(echo "${MESSAGE}" | grep -i %PUSHOVER:)
+PMESSAGE=$(echo "${MESSAGE}" | grep -iv %PUSHOVER:)
 
 OLDIFS=$IFS
 IFS=$'\n'
 for PL in ${POPTS}
 do
-	OPT=$(echo $PL | cut -f3 -d'%')
-	VAL=$(echo $PL | cut -f4 -d'%')
-	set_field "$OPT" "$VAL"
+    OPT=$(echo ${PL} | cut -f2 -d'%' | cut -f2 -d':')
+    VAL=$(echo ${PL} | cut -f3 -d'%')
+    msg_field "$OPT" "$VAL"
 done
-IFS=$OLDIFS
+IFS=${OLDIFS}
 
 send_message
-
-
